@@ -27,13 +27,15 @@ O sistema opera sobre uma hierarquia de dados específica que conecta o mercado 
 
 ```mermaid
 graph TD
-    Fund[Fundo (Ex: RZAG11)] -->|Possui| Asset[Ativo (CRA/LCA)]
-    Asset -->|Devedor| Debtor[Devedor (CNPJ/Grupo)]
-    Debtor -->|Propriedade| Farm[Fazenda/Unidade Produtiva]
-    
-    Farm -.->|Monitora| Climate[Dados Climáticos (INMET/NASA)]
-    Farm -.->|Monitora| Crop[Dados de Safra (CONAB)]
-    Debtor -.->|Monitora| Legal[Dados Jurídicos (TJs/Diários)]
+    Fund[Fundo<br/>Ex: RZAG11] -->|Possui| Asset[Ativo<br/>CRA ou LCA]
+    Asset -->|Devedor| Debtor[Devedor<br/>CNPJ ou Grupo]
+    Debtor -->|Propriedade| Farm[Fazenda<br/>Unidade Produtiva]
+
+    Farm -.->|Monitora| Climate[Dados Climáticos<br/>INMET ou NASA]
+    Farm -.->|Monitora| Crop[Dados de Safra<br/>CONAB]
+    Debtor -.->|Monitora| Legal[Dados Jurídicos<br/>TJs ou Diários]
+
+
 ```
 
 ---
