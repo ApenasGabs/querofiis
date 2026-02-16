@@ -15,6 +15,7 @@ import {
   Progress,
   Radio,
   Textarea,
+  FiagroExplorer,
 } from "../components";
 
 export const ComponentsDemo = (): React.JSX.Element => {
@@ -87,10 +88,7 @@ export const ComponentsDemo = (): React.JSX.Element => {
 
           <div>
             <Label required>Textarea</Label>
-            <Textarea
-              placeholder="Enter your message..."
-              helperText="Maximum 500 characters"
-            />
+            <Textarea placeholder="Enter your message..." helperText="Maximum 500 characters" />
           </div>
 
           <div className="space-y-2">
@@ -170,6 +168,12 @@ export const ComponentsDemo = (): React.JSX.Element => {
       </section>
 
       <Divider />
+
+      {/* Fiagro Explorer Demo */}
+      <section>
+        <h2 className="text-2xl font-bold mb-4">Fiagro Explorer (demo)</h2>
+        <FiagroExplorer />
+      </section>
 
       {/* Divider Examples */}
       <section>
