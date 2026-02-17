@@ -2,7 +2,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import { IncomingMessage, ServerResponse } from "http";
 
-interface FiagroData {
+export interface FiagroData {
   ticker: string;
   preco: string;
   dy: string;
@@ -13,73 +13,122 @@ interface FiagroData {
   nome: string;
 }
 
-// Simple in-memory cache
-let cache: { data: FiagroData[]; timestamp: number } | null = null;
-const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+const BASE_URL = "https://fiagro.com.br";
+const LIST_URL = `${BASE_URL}/`;
+
+const PLACEHOLDER = "—";
+
+let listCache: { data: FiagroData[]; timestamp: number } | null = null;
+const CACHE_DURATION = 15 * 60 * 1000; // 15 min
+
+/** Extrai lista de fiagros da homepage (uma única requisição) */
+function parseListFromHomepage(html: string): FiagroData[] {
+  const $ = cheerio.load(html);
+  const results: FiagroData[] = [];
+  const seen = new Set<string>();
+
+  $('a[href*="/"]').each((_, el) => {
+    const href = $(el).attr("href") ?? "";
+    const match = href.match(/^\/([a-z0-9]+11)\/?$/i);
+    if (!match) return;
+    const ticker = match[1].toUpperCase();
+    if (seen.has(ticker)) return;
+    seen.add(ticker);
+
+    const card = $(el).closest("div[class]").length ? $(el).closest("div[class]") : $(el).parent();
+    const text = card.text();
+    const priceMatch = text.match(/R\$\s*([\d,]+)/);
+    const dyMatch = text.match(/DY\s*([\d,]+)\s*%/);
+    const preco = priceMatch ? priceMatch[1].replace(",", ".") : PLACEHOLDER;
+    const dy = dyMatch ? dyMatch[1].replace(",", ".") : PLACEHOLDER;
+    const nome =
+      $(el)
+        .text()
+        .trim()
+        .replace(ticker, "")
+        .replace(/R\$\s*[\d,]+.*/, "")
+        .trim() || ticker;
+
+    results.push({
+      ticker,
+      nome: nome.slice(0, 100),
+      preco,
+      dy,
+      pvp: PLACEHOLDER,
+      pl: PLACEHOLDER,
+      setor: "Fiagro",
+      last_div: PLACEHOLDER,
+    });
+  });
+
+  return results;
+}
+
+/** Responde JSON */
+function sendJson(res: ServerResponse, status: number, data: unknown): void {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify(data));
+}
 
 export default async function handler(
   req: IncomingMessage & { query: Record<string, string | string[]> },
   res: ServerResponse,
-) {
+): Promise<void> {
   if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method not allowed" });
+    sendJson(res, 405, { error: "Method not allowed" });
+    return;
   }
 
   const { tickers } = req.query;
   if (!tickers || typeof tickers !== "string") {
-    return res.status(400).json({ error: "Tickers parameter required" });
+    sendJson(res, 400, { error: "Tickers parameter required" });
+    return;
   }
 
-  const tickerList = tickers.split(",").slice(0, 25); // Limit to 25
+  const b3Acronyms = tickers
+    .split(",")
+    .map((t) => t.trim().toUpperCase())
+    .filter(Boolean);
+  const b3Set = new Set(b3Acronyms);
 
-  // Check cache
-  if (cache && Date.now() - cache.timestamp < CACHE_DURATION) {
-    return res.status(200).json(cache.data.filter((item) => tickerList.includes(item.ticker)));
+  if (listCache && Date.now() - listCache.timestamp < CACHE_DURATION) {
+    const filtered = listCache.data.filter((item) => {
+      const acronym = item.ticker.replace(/11$/, "");
+      return b3Set.has(acronym) || b3Set.has(item.ticker);
+    });
+    sendJson(res, 200, filtered);
+    return;
   }
 
   try {
-    const data: FiagroData[] = [];
+    const response = await axios.get<string>(LIST_URL, {
+      timeout: 15000,
+      responseType: "text",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+      },
+    });
 
-    for (const ticker of tickerList) {
-      try {
-        const url = `https://fiagro.com.br/${ticker.toLowerCase()}/`;
-        const response = await axios.get(url, { timeout: 10000 });
-        const $ = cheerio.load(response.data);
-
-        const preco = $(".preco strong").text().trim().replace(",", ".");
-        const dy = $(".dy").text().trim().replace("%", "").replace(",", ".");
-        const pvp = $('table.stats td:contains("P/VP")').next().text().trim() || "N/A";
-        const pl = $('table.stats td:contains("PL")').next().text().trim() || "N/A";
-        const setor = $('table.stats td:contains("Setor")').next().text().trim() || "N/A";
-        const last_div =
-          $('table.stats td:contains("Último Dividendo")').next().text().trim() || "N/A";
-        const nome = $("h1").text().trim() || ticker;
-
-        data.push({
-          ticker: ticker.toUpperCase(),
-          preco,
-          dy,
-          pvp,
-          pl,
-          setor,
-          last_div,
-          nome,
-        });
-
-        // Delay to avoid rate limiting
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      } catch (error) {
-        console.error(`Error scraping ${ticker}:`, error);
-        // Skip this ticker
-      }
+    if (!response.data || response.data.length < 1000) {
+      sendJson(res, 502, { error: "Fiagro homepage unavailable" });
+      return;
     }
 
-    // Update cache
-    cache = { data, timestamp: Date.now() };
+    const fullList = parseListFromHomepage(response.data);
+    listCache = { data: fullList, timestamp: Date.now() };
 
-    res.status(200).json(data);
-  } catch (error) {
-    console.error("Error fetching data:", error);
-    res.status(500).json({ error: "Failed to fetch data" });
+    const filtered = fullList.filter((item) => {
+      const acronym = item.ticker.replace(/11$/, "");
+      return b3Set.has(acronym) || b3Set.has(item.ticker);
+    });
+
+    sendJson(res, 200, filtered);
+  } catch (err) {
+    console.error("Error fetching fiagro list:", err);
+    sendJson(res, 500, { error: "Failed to fetch fiagro list" });
   }
 }
