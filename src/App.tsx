@@ -6,7 +6,7 @@ import { FiagroExplorer } from "./components/FiagroExplorer/FiagroExplorer";
 const App = () => {
   return (
     <div className="min-h-screen bg-base-200 flex flex-col">
-      <Navbar title="Apenas Template">
+      <Navbar title="Quero FIIS">
         <ThemeSelector />
       </Navbar>
       <FiagroExplorer />
