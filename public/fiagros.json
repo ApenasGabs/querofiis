@@ -1,0 +1,6 @@
+[
+  { "ticker": "FGAA11", "preco": 9.45, "variacao": 13.8, "volume": 12345 },
+  { "ticker": "SNAG11", "preco": 10.05, "variacao": 11.45, "volume": 54321 },
+  { "ticker": "BASE100", "preco": 98.5, "variacao": 14.1, "volume": 23456 },
+  { "ticker": "TOPY11", "preco": 9.15, "variacao": 15.22, "volume": 9876 }
+]
