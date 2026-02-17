@@ -14,6 +14,9 @@ export const FiagroExplorer = () => {
     loadMore,
     hasMore,
     refresh,
+    detailByTicker,
+    loadingDetailTicker,
+    fetchDetail,
   } = useFiagros();
 
   const marketAvgDY =
@@ -45,7 +48,7 @@ export const FiagroExplorer = () => {
               setFilters({
                 priceMin: 8,
                 priceMax: 110,
-                dyMin: 10.5,
+                dyMin: 0,
                 pvpBelow1: false,
                 pvpFair: false,
                 sectors: ["Paper (CRI/Agro)", "Equity / Land", "Hybrid", "FOF (Fund of Funds)"],
@@ -215,7 +218,10 @@ export const FiagroExplorer = () => {
               <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Assets Tracked
               </p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+              <p
+                className="text-2xl font-bold text-gray-900 dark:text-white mt-1"
+                data-testid="assets-tracked"
+              >
                 {fiagros.length}
               </p>
             </div>
@@ -305,88 +311,129 @@ export const FiagroExplorer = () => {
           </div>
         </div>
 
-        {loading && <div>Loading...</div>}
-        {error && <div className="text-red-500">{error}</div>}
+        {loading && (
+          <div data-testid="fiagro-loading">Loading...</div>
+        )}
+        {error && (
+          <div data-testid="fiagro-error" className="text-red-500">
+            {error}
+          </div>
+        )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {fiagros.map((fiagro: Fiagro) => (
-            <article
-              key={fiagro.ticker}
-              className="group bg-white dark:bg-surface-dark rounded-xl border border-gray-200 dark:border-white/5 overflow-hidden hover:border-primary transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 relative"
-            >
-              <div className="p-5">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center border border-white/10">
-                      <span className="font-bold text-white text-xs">
-                        {fiagro.ticker.slice(0, 4)}
-                      </span>
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-lg text-gray-900 dark:text-white leading-none">
-                        {fiagro.ticker}
-                      </h3>
-                      <span className="text-[10px] text-primary font-medium bg-primary/10 px-1.5 py-0.5 rounded mt-1 inline-block">
-                        {fiagro.setor}
-                      </span>
-                    </div>
-                  </div>
-                  <button className="text-gray-400 hover:text-primary transition-colors">
-                    <span className="material-icons">bookmark_border</span>
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-y-4 gap-x-2 mb-5">
-                  <div>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-tight">
-                      Current Price
-                    </p>
-                    <p className="text-base font-semibold text-gray-900 dark:text-white">
-                      R$ {fiagro.preco}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-tight">
-                      DY (12m)
-                    </p>
-                    <p className="text-base font-bold text-primary">{fiagro.dy}%</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-tight">
-                      P/VP
-                    </p>
-                    <p className="text-base font-medium text-gray-300">{fiagro.pvp}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-tight">
-                      Last Div.
-                    </p>
-                    <p className="text-base font-medium text-gray-300">R$ {fiagro.last_div}</p>
-                  </div>
-                </div>
-                <div className="bg-surface-darker rounded-lg p-3 border border-white/5 group-hover:border-primary/20 transition-colors relative overflow-hidden">
-                  <div className="absolute right-0 top-0 h-full w-1 bg-primary"></div>
-                  <div className="flex justify-between items-end relative z-10">
-                    <div>
-                      <div className="flex items-center gap-1 mb-1">
-                        <span className="material-icons text-primary text-xs">ac_unit</span>
-                        <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
-                          Magic Number
-                        </p>
+        <div
+          className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+          data-testid="fiagro-list"
+        >
+          {fiagros.map((fiagro: Fiagro) => {
+            const detail = detailByTicker[fiagro.ticker];
+            const display: Fiagro = detail ? { ...fiagro, ...detail } : fiagro;
+            const isLoadingDetail = loadingDetailTicker === fiagro.ticker;
+            const hasDetail = Boolean(detail);
+            return (
+              <article
+                key={fiagro.ticker}
+                data-testid={`fiagro-card-${fiagro.ticker}`}
+                className="group bg-white dark:bg-surface-dark rounded-xl border border-gray-200 dark:border-white/5 overflow-hidden hover:border-primary transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 relative cursor-pointer"
+                onClick={() => fetchDetail(fiagro.ticker)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    fetchDetail(fiagro.ticker);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                <div className="p-5">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center border border-white/10">
+                        <span className="font-bold text-white text-xs">
+                          {display.ticker.slice(0, 4)}
+                        </span>
                       </div>
-                      <p className="text-xl font-bold text-white">
-                        R$ {calculateMagicNumber(fiagro.dy)}
+                      <div>
+                        <h3 className="font-bold text-lg text-gray-900 dark:text-white leading-none">
+                          {display.ticker}
+                        </h3>
+                        <span className="text-[10px] text-primary font-medium bg-primary/10 px-1.5 py-0.5 rounded mt-1 inline-block">
+                          {display.setor}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      className="text-gray-400 hover:text-primary transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span className="material-icons">bookmark_border</span>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-y-4 gap-x-2 mb-5">
+                    <div>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-tight">
+                        Current Price
+                      </p>
+                      <p className="text-base font-semibold text-gray-900 dark:text-white">
+                        R$ {display.preco}
                       </p>
                     </div>
                     <div className="text-right">
-                      <span className="text-[10px] text-gray-500">
-                        ~{Math.round(1000 / parseFloat(fiagro.preco))} shares
-                      </span>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-tight">
+                        DY (12m)
+                      </p>
+                      <p className="text-base font-bold text-primary">{display.dy}%</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-tight">
+                        P/VP
+                      </p>
+                      <p className="text-base font-medium text-gray-300">
+                        {isLoadingDetail ? "Carregando…" : display.pvp}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-tight">
+                        Last Div.
+                      </p>
+                      <p className="text-base font-medium text-gray-300">
+                        {isLoadingDetail ? "…" : `R$ ${display.last_div}`}
+                      </p>
+                    </div>
+                  </div>
+                  {!hasDetail && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                      Clique para carregar P/VP e último dividendo
+                    </p>
+                  )}
+                  <div className="bg-surface-darker rounded-lg p-3 border border-white/5 group-hover:border-primary/20 transition-colors relative overflow-hidden">
+                    <div className="absolute right-0 top-0 h-full w-1 bg-primary"></div>
+                    <div className="flex justify-between items-end relative z-10">
+                      <div>
+                        <div className="flex items-center gap-1 mb-1">
+                          <span className="material-icons text-primary text-xs">ac_unit</span>
+                          <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                            Magic Number
+                          </p>
+                        </div>
+                        <p className="text-xl font-bold text-white">
+                          R$ {calculateMagicNumber(display.dy)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-gray-500">
+                          ~
+                          {Number.isNaN(parseFloat(display.preco))
+                            ? "—"
+                            : Math.round(1000 / parseFloat(display.preco))}{" "}
+                          shares
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
 
         {hasMore && (

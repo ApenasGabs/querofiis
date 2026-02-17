@@ -11,10 +11,30 @@ export interface Fiagro {
   nome: string;
 }
 
-interface B3Fund {
-  symbol?: string;
-  code?: string;
-  acronym?: string;
+/** Resposta do endpoint B3 de listagem de fundos (usado para tipar o fetch) */
+interface B3ListResponse {
+  page: {
+    pageNumber: number;
+    pageSize: number;
+    totalRecords: number;
+    totalPages: number;
+  };
+  results: Array<{
+    id: number;
+    typeName: string | null;
+    acronym: string;
+    fundName: string;
+    tradingName: string;
+  }>;
+}
+
+function isB3ListResponse(data: unknown): data is B3ListResponse {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "results" in data &&
+    Array.isArray((data as B3ListResponse).results)
+  );
 }
 
 export interface Filters {
@@ -39,6 +59,12 @@ export interface UseFiagrosReturn {
   loadMore: () => void;
   hasMore: boolean;
   refresh: () => void;
+  /** Detalhe completo (P/VP, último div etc.) quando o usuário clica no fundo */
+  detailByTicker: Record<string, Fiagro>;
+  /** Ticker cujo detalhe está carregando */
+  loadingDetailTicker: string | null;
+  /** Carrega detalhe do fundo (uma requisição por clique) */
+  fetchDetail: (ticker: string) => Promise<void>;
 }
 
 const ITEMS_PER_PAGE = 6;
@@ -53,7 +79,7 @@ export function useFiagros(): UseFiagrosReturn {
   const [filters, setFilters] = useState<Filters>({
     priceMin: 8,
     priceMax: 110,
-    dyMin: 10.5,
+    dyMin: 0,
     pvpBelow1: false,
     pvpFair: false,
     sectors: ["Paper (CRI/Agro)", "Equity / Land", "Hybrid", "FOF (Fund of Funds)"],
@@ -61,18 +87,27 @@ export function useFiagros(): UseFiagrosReturn {
 
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"dy" | "price">("dy");
+  const [detailByTicker, setDetailByTicker] = useState<Record<string, Fiagro>>({});
+  const [loadingDetailTicker, setLoadingDetailTicker] = useState<string | null>(null);
 
-  // Fetch tickers from B3
+  // Fetch tickers from B3 via our API (evita HTML no lugar de JSON em produção/preview)
   useEffect(() => {
     const fetchTickers = async () => {
       try {
-        const response = await fetch("/b3-funds");
+        const response = await fetch("/api/b3-funds");
         if (!response.ok) throw new Error("Failed to fetch tickers");
-        const data = await response.json();
-        // Assuming the response has a 'results' array with tickers
-        const tickers =
-          data.results?.map((item: B3Fund) => item.symbol || item.code || item.acronym) || [];
-        setTickers(tickers.slice(0, 25));
+        const contentType = response.headers?.get("Content-Type") ?? "";
+        if (!contentType.includes("application/json")) {
+          throw new Error("Server returned non-JSON response");
+        }
+        const data: unknown = await response.json();
+        if (!isB3ListResponse(data)) {
+          throw new Error("Invalid response format from B3 list");
+        }
+        const tickerList = data.results
+          .map((item) => item.acronym?.trim())
+          .filter((t): t is string => typeof t === "string" && t.length > 0);
+        setTickers(tickerList.slice(0, 25));
       } catch (err) {
         console.error("Error fetching tickers:", err);
         setError("Failed to load tickers");
@@ -116,9 +151,11 @@ export function useFiagros(): UseFiagrosReturn {
       // DY min
       if (dy < filters.dyMin) return false;
 
-      // P/VP
-      if (filters.pvpBelow1 && pvp >= 1) return false;
-      if (filters.pvpFair && pvp < 1) return false;
+      // P/VP (só aplica se tiver valor numérico; "—" = detalhe não carregado)
+      if (!Number.isNaN(pvp)) {
+        if (filters.pvpBelow1 && pvp >= 1) return false;
+        if (filters.pvpFair && pvp < 1) return false;
+      }
 
       // Sectors
       if (filters.sectors.length > 0 && !filters.sectors.includes(fiagro.setor)) return false;
@@ -154,10 +191,24 @@ export function useFiagros(): UseFiagrosReturn {
 
   const refresh = () => {
     setPage(1);
-    // Re-fetch
     setAllFiagros([]);
+    setDetailByTicker({});
     setLoading(true);
-    // Trigger useEffect by updating tickers or something, but for now, assume re-run
+  };
+
+  const fetchDetail = async (ticker: string): Promise<void> => {
+    if (detailByTicker[ticker]) return;
+    setLoadingDetailTicker(ticker);
+    try {
+      const response = await fetch(`/api/fiagro-detail?ticker=${encodeURIComponent(ticker)}`);
+      if (!response.ok) throw new Error("Failed to fetch detail");
+      const data: Fiagro = await response.json();
+      setDetailByTicker((prev) => ({ ...prev, [ticker]: data }));
+    } catch (err) {
+      console.error("Error fetching detail for", ticker, err);
+    } finally {
+      setLoadingDetailTicker(null);
+    }
   };
 
   return {
@@ -173,5 +224,8 @@ export function useFiagros(): UseFiagrosReturn {
     loadMore,
     hasMore,
     refresh,
+    detailByTicker,
+    loadingDetailTicker,
+    fetchDetail,
   };
 }
