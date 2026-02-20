@@ -1,181 +1,162 @@
-# Fiagro Risk Engine (FRE) - Documentação de Arquitetura
+# Quero FIAGROs – Arquitetura
 
-**Status:** Em Desenvolvimento
-**Versão:** 1.0.0
-**Stack:** Nx Monorepo (NestJS, Next.js, Python, PostgreSQL)
-
----
-
-## 1. Visão Geral e Tese Acadêmica
-
-O **Fiagro Risk Engine** é um sistema de inteligência financeira focado na predição de risco de crédito e oportunidades de arbitragem em Fundos de Investimento nas Cadeias Produtivas Agroindustriais (Fiagros).
-
-### 1.1. O Problema
-
-A análise tradicional de Fiagros foca em métricas passadas (Dividend Yield, P/VP). No entanto, o risco real do agronegócio é sistêmico, correlacionado e antecede os relatórios financeiros. Eventos climáticos (seca/chuva) e jurídicos (processos) impactam a solvência do devedor meses antes do *default* (calote) ser oficializado.
-
-### 1.2. Objetivos do Sistema
-
-1. **Risk Engine (Defensivo):** Calcular a probabilidade de inadimplência de um CRA baseada na saúde das fazendas lastreadas (Clima + Safra) e no comportamento jurídico do devedor.
-2. **Market Engine (Ofensivo/Alpha):** Identificar ineficiências de preço (Panic Selling) onde o valor de mercado do fundo descola do seu valor justo calculado pelo modelo.
+**Versão:** 0.2.0  
+**Status:** Produção  
+**URL:** https://querofiis.vercel.app
 
 ---
 
-## 2. Modelagem de Domínio (Domain Driven Design)
+## 1. Visão Geral
 
-O sistema opera sobre uma hierarquia de dados específica que conecta o mercado financeiro à realidade física do campo.
+**Quero FIAGROs** é uma aplicação web que permite visualizar e filtrar fundos de investimento agrícola (FIAGROs) listados na B3. Os dados são obtidos em real-time via:
 
-```mermaid
-graph TD
-    Fund[Fundo<br/>Ex: RZAG11] -->|Possui| Asset[Ativo<br/>CRA ou LCA]
-    Asset -->|Devedor| Debtor[Devedor<br/>CNPJ ou Grupo]
-    Debtor -->|Propriedade| Farm[Fazenda<br/>Unidade Produtiva]
+- **B3 API** – lista oficial de tickers cadastrados na bolsa
+- **fiagro.com.br (scraping)** – preço atual, Dividend Yield (DY), P/VP, patrimônio líquido e último rendimento
 
-    Farm -.->|Monitora| Climate[Dados Climáticos<br/>INMET ou NASA]
-    Farm -.->|Monitora| Crop[Dados de Safra<br/>CONAB]
-    Debtor -.->|Monitora| Legal[Dados Jurídicos<br/>TJs ou Diários]
+A interface exibe cards por fundo com filtros avançados (preço, DY, setor) e um modal de detalhes carregado sob demanda.
 
+---
 
+## 2. Stack
+
+| Camada | Tecnologia |
+|---|---|
+| Frontend | React 19, TypeScript, Vite 7 |
+| Estilo | Tailwind CSS 4 + daisyUI 5 |
+| API (prod) | Vercel Serverless Functions (Node.js) |
+| API (local) | Express.js (`local-api.ts`) |
+| Scraping | axios + cheerio |
+| Testes unitários | Vitest + @testing-library/react |
+| Testes E2E | Playwright |
+| Deploy | Vercel (framework: vite) |
+
+---
+
+## 3. Fluxo de Dados
+
+```
+Usuário abre a app
+       │
+       ▼
+[React] useFiagros (passo 1)
+       │  GET /api/b3-funds
+       ▼
+[Vercel] api/b3-funds.ts
+       │  proxy → B3 API (sistemaswebb3-listados.b3.com.br)
+       │  retorna: { page, results: [{ acronym, fundName, ... }] }
+       ▼
+[React] monta cards básicos instantaneamente (nome + ticker, demais = "—")
+
+       │ (logo após)
+       │  GET /api/fiagro-data?tickers=FGAA,SNAG,...
+       ▼
+[Vercel] api/fiagro-data.ts
+       │  scraping → https://fiagro.com.br/
+       │  cache em memória de 15 min
+       │  retorna: FiagroData[]
+       ▼
+[React] atualiza cards com preço e DY reais
+
+  (usuário clica em um card)
+       │  GET /api/fiagro-detail?ticker=FGAA
+       ▼
+[Vercel] api/fiagro-detail.ts
+       │  scraping → https://fiagro.com.br/fgaa11/
+       │  retorna: FiagroData (com P/VP, PL, último div)
+       ▼
+[React] abre modal com dados completos
 ```
 
 ---
 
-## 3. Arquitetura Técnica (Tech Stack)
+## 4. Estrutura de Pastas
 
-O projeto utiliza uma arquitetura de **Monorepo** gerenciada pelo **Nx**, permitindo compartilhamento de tipos e código entre serviços.
-
-| Componente | Tecnologia | Responsabilidade |
-| :--- | :--- | :--- |
-| **Orquestrador** | **Nx** | Build system, cache e gestão do monorepo. |
-| **Backend API** | **NestJS** (Node.js) | Gateway, Regras de Negócio e Gestão de Usuários. |
-| **Data Ingestion** | **Puppeteer** + **BullMQ** | Crawlers (CVM, TJs, Clima) rodando em background com filas de retentativa. |
-| **ML Service** | **Python** (FastAPI) | Treinamento e inferência de modelos (Scikit-Learn/Pandas). |
-| **Database** | **PostgreSQL** | Armazenamento relacional robusto. |
-| **ORM** | **Prisma** | Modelagem de dados e Type-safety entre DB e Backend. |
-| **Frontend** | **Next.js** (React) | Dashboard interativo e visualização de dados. |
-
----
-
-## 4. Estrutura do Repositório (Folder Structure)
-
-```text
-/
-├── apps/
-│   ├── api/                 # (NestJS) API Principal (REST/GraphQL)
-│   ├── web/                 # (Next.js) Dashboard do Investidor
-│   ├── scraper-worker/      # (Node.js) Microsserviço de coleta de dados (Consumers BullMQ)
-│   └── ml-service/          # (Python) Microsserviço de Inteligência Artificial
-├── libs/
-│   ├── core-data/           # (TS) Interfaces e Tipos compartilhados (Entity, DTOs)
-│   ├── database/            # (TS) Client Prisma e Scripts de Seed
-│   └── util-formatting/     # (TS) Helpers (Formatadores de Moeda, CNPJ, Data)
-├── tools/                   # Scripts de automação
-├── docker-compose.yml       # Infraestrutura local (Postgres, Redis)
-└── schema.prisma            # Definição do Banco de Dados
+```
+querofiis/
+├── api/                        # Vercel Serverless Functions
+│   │                           # ⚠️  TODO arquivo .ts nesta raiz vira endpoint HTTP
+│   ├── _lib/                   # ← pasta privada (Vercel ignora prefixo `_`)
+│   │   ├── fiagroScraper.ts    #   scraper: parseListFromHomepage, parseDetailPage…
+│   │   └── openapi-spec.ts     #   objeto OpenAPI 3.0.3 compartilhado
+│   ├── __tests__/              # testes das funções e do scraper
+│   ├── index.ts                # GET /api        → Swagger UI (HTML)
+│   ├── ping.ts                 # GET /api/ping   → health check
+│   ├── b3-funds.ts             # GET /api/b3-funds → proxy B3
+│   ├── fiagro-data.ts          # GET /api/fiagro-data → scraping lista
+│   ├── fiagro-detail.ts        # GET /api/fiagro-detail → scraping detalhe
+│   └── openapi.ts              # GET /api/openapi → spec JSON
+│
+├── src/
+│   ├── App.tsx                 # layout principal
+│   ├── main.tsx                # entry point React
+│   ├── hooks/
+│   │   └── useFiagros.ts       # toda a lógica de dados, filtros e paginação
+│   └── components/
+│       ├── FiagroExplorer/     # componente principal (sidebar + grid + modal)
+│       ├── Navbar/             # barra superior
+│       ├── Footer/             # rodapé
+│       └── ...                 # componentes UI reutilizáveis
+│
+├── public/
+│   ├── fiagros.json            # snapshot estático (fallback)
+│   ├── sitemap.xml
+│   └── robots.txt
+│
+├── local-api.ts                # servidor Express para dev local (porta 3001)
+├── vite.config.ts              # proxy /api/* → localhost:3001
+├── vercel.json                 # configuração Vercel
+└── package.json
 ```
 
 ---
 
-## 5. Pipeline de Dados (ETL & Feature Engineering)
+## 5. Ambientes
 
-O fluxo de dados segue o padrão *Bronze -> Silver -> Gold*.
+### Produção (Vercel)
 
-1. **Ingestão (Bronze):** Scripts baixam PDFs da CVM, HTML de notícias e JSONs de clima. Dados brutos são salvos ou processados imediatamente.
-2. **Refinamento (Silver):** Normalização.
-    * *Ex:* Converter "Saca a R$ 120" e "Ton a R$ 2000" para mesma unidade.
-    * *Ex:* Vincular um CNPJ genérico a uma Lat/Long específica.
-3. **Feature Store (Gold):** Dados prontos para o Modelo (Tabela `TrainingSample`).
-    * Criação de métricas relativas (z-scores, médias móveis).
-    * *Ex:* `rain_anomaly_30d` (Desvio padrão da chuva nos últimos 30 dias).
+- Frontend estático servido pelo CDN do Vercel (output: `dist/`)
+- `api/*.ts` são compilados como serverless functions automaticamente
+- `api/_lib/*.ts` são arquivos privados — o Vercel ignora pastas com prefixo `_`
+- `vercel.json` faz rewrite: rotas não-API (`/((?!api(/|$)).*)`) → `index.html`
 
----
+### Desenvolvimento Local
 
-## 6. Schema do Banco de Dados (Prisma)
-
-```prisma
-// schema.prisma
-
-model Fiagro {
-  id        String   @id @default(uuid())
-  ticker    String   @unique // Ex: RZAG11
-  assets    Asset[]
-  marketData MarketHistory[]
-}
-
-model Asset {
-  id          String   @id @default(uuid())
-  fiagroId    String
-  fiagro      Fiagro   @relation(fields: [fiagroId], references: [id])
-  name        String   // Ex: CRA Grupo X
-  debtorCnpj  String?  
-  sector      String   // SOJA, MILHO
-  riskData    RiskSnapshot[]
-}
-
-// Séries Temporais de Mercado
-model MarketHistory {
-  id          String   @id @default(uuid())
-  fiagroId    String
-  fiagro      Fiagro   @relation(fields: [fiagroId], references: [id])
-  date        DateTime @db.Date
-  closePrice  Float
-  volume      Float
-  pvp         Float?
-  
-  @@unique([fiagroId, date])
-}
-
-// Dados Climáticos (Risk Drivers)
-model ClimateData {
-  id          String   @id @default(uuid())
-  city        String
-  state       String
-  date        DateTime @db.Date
-  precipitationMm  Float 
-  historicalAvgMm  Float 
-}
-
-// Tabela de Treinamento (Feature Store)
-model TrainingSample {
-  idString    String   @id @default(uuid())
-  ticker      String   
-  referenceDate DateTime @db.Date
-
-  // Features (X)
-  feat_rain_anomaly_60d      Float? 
-  feat_legal_lawsuits_count  Int?   
-  feat_price_drawdown        Float?
-
-  // Targets (Y)
-  target_price_return_30d    Float? 
-  target_is_default          Boolean?
-
-  @@unique([ticker, referenceDate])
-}
+```bash
+yarn dev:full
 ```
 
----
-
-## 7. Estratégia de Machine Learning
-
-### 7.1. Metodologia
-
-Utilizaremos aprendizado supervisionado com janelas de tempo deslizantes (*Sliding Windows*).
-
-* **Target (Y):** Evento de Default (Binário) ou Retorno do Preço em 30 dias (Regressão).
-* **Features (X):** Dados defasados (Lagged) de T-30, T-60 e T-90 dias.
-
-### 7.2. Modelos
-
-1. **Detecção de Anomalias (Isolation Forest):** Para identificar comportamentos fora do padrão (ex: aumento súbito de processos jurídicos).
-2. **Scoring (XGBoost):** Para atribuir uma nota de 0 a 100 para o risco de crédito do devedor.
+Executa em paralelo:
+- **Vite** na porta `5173` (frontend com HMR)
+- **Express** (`local-api.ts`) na porta `3001`
+- Vite proxeia `/api/*` → `http://localhost:3001`
 
 ---
 
-## 8. Guia de Implementação (Passos Iniciais)
+## 6. Cache
 
-1. **Setup:** Inicializar o workspace Nx e subir containers Docker (Postgres/Redis).
-2. **Database:** Rodar `npx prisma migrate dev` para criar as tabelas.
-3. **Ingestão A (Carteiras):** Criar script em `scraper-worker` para ler PDF da CVM e popular a tabela `Asset`.
-4. **Ingestão B (Mercado):** Criar script para buscar cotações históricas da B3 e popular `MarketHistory`.
-5. **Dashboard:** Criar visualização simples em `apps/web` listando os Fundos e seus Ativos.
+`api/fiagro-data.ts` mantém um cache em memória (`listCache`) com TTL de **15 minutos**. Isso evita múltiplas requisições ao fiagro.com.br para diferentes usuários dentro do mesmo período de vida da instância serverless.
+
+> Serverless functions na Vercel são descartadas após inatividade, então o cache é melhor-esforço.
+
+---
+
+## 7. Deploy
+
+1. Push para `main` → Vercel triggera build automático
+2. `yarn build` executa `tsc -b && vite build`
+3. Funções em `api/*.ts` são detectadas e compiladas pela Vercel
+4. Frontend vai para `dist/`, servido pelo CDN
+
+Configuração relevante em [vercel.json](../vercel.json):
+
+```json
+{
+  "version": 2,
+  "framework": "vite",
+  "outputDirectory": "dist",
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/((?!api(/|$)).*)", "destination": "/index.html" }
+  ]
+}
+```

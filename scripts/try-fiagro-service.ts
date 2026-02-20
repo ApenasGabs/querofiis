@@ -2,20 +2,21 @@ import {
   fetchFiagroList,
   filterFiagrosByTickers,
   fetchFiagroDetail,
-} from "../src/services/fiagroScraper";
+} from "../api/_lib/fiagroScraper.js";
 
 async function main() {
   const list = await fetchFiagroList();
   console.log("Total encontrados:", list.length);
+  console.table(list.slice(0, 5)); // primeiros 5 como amostra
 
   const selecionados = filterFiagrosByTickers(list, ["FGAA", "SNAG"]);
 
-  const detalhe = await fetchFiagroDetail("FGAA");
+  console.log("\nFiltrados (FGAA + SNAG):");
+  console.table(selecionados);
 
-  if (!detalhe) {
-    console.log("Filtrados:", selecionados);
-    console.log("Detalhe FGAA:", detalhe);
-  }
+  const detalhe = await fetchFiagroDetail("FGAA");
+  console.log("\nDetalhe FGAA11:");
+  console.table([detalhe]);
 }
 
 main().catch((err) => {

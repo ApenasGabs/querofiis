@@ -1,7 +1,7 @@
 import express from "express";
 import axios from "axios";
 import * as cheerio from "cheerio";
-import { openapiSpec } from "./api/openapi-spec.js";
+import { openapiSpec } from "./api/_lib/openapi-spec.js";
 
 interface FiagroData {
   ticker: string;
@@ -282,11 +282,40 @@ app.get("/api/openapi", (_req: express.Request, res: express.Response) => {
 });
 
 app.get("/api", (_req: express.Request, res: express.Response) => {
+  // Mesmo HTML servido por api/index.ts em produção
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.sendFile("public/docs.html", { root: process.cwd() });
+  res.send(`<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quero FIAGROs – API Docs</title>
+  <meta name="robots" content="noindex" />
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <style>
+    body { margin: 0; }
+    .swagger-ui .topbar { background-color: #1a1a2e; }
+    .swagger-ui .topbar .download-url-wrapper { display: none; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    SwaggerUIBundle({
+      url: "/api/openapi",
+      dom_id: "#swagger-ui",
+      presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+      layout: "BaseLayout",
+      deepLinking: true,
+      tryItOutEnabled: true,
+    });
+  </script>
+</body>
+</html>`);
 });
 
 app.listen(port, () => {
   console.log(`Local API server running at http://localhost:${port}`);
-  console.log(`API Docs: http://localhost:5173/docs.html`);
+  console.log(`API Docs: http://localhost:5173/api`);
 });
