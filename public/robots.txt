@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://querofiis.vercel.app/sitemap.xml
