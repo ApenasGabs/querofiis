@@ -51,7 +51,7 @@ export const FiagroExplorer = () => {
                 dyMin: 0,
                 pvpBelow1: false,
                 pvpFair: false,
-                sectors: ["Paper (CRI/Agro)", "Equity / Land", "Hybrid", "FOF (Fund of Funds)"],
+                sectors: [],
               })
             }
           >
@@ -311,9 +311,7 @@ export const FiagroExplorer = () => {
           </div>
         </div>
 
-        {loading && (
-          <div data-testid="fiagro-loading">Loading...</div>
-        )}
+        {loading && <div data-testid="fiagro-loading">Loading...</div>}
         {error && (
           <div data-testid="fiagro-error" className="text-red-500">
             {error}

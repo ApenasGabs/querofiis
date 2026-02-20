@@ -1,6 +1,8 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { IncomingMessage, ServerResponse } from "http";
+import type { Element } from "domhandler"; // <-- importar daqui especificamente
+import type { AnyNode } from "domhandler";
 
 export interface FiagroData {
   ticker: string;
@@ -15,34 +17,53 @@ export interface FiagroData {
 
 const BASE_URL = "https://fiagro.com.br";
 const LIST_URL = `${BASE_URL}/`;
-
 const PLACEHOLDER = "—";
 
 let listCache: { data: FiagroData[]; timestamp: number } | null = null;
-const CACHE_DURATION = 15 * 60 * 1000; // 15 min
+const CACHE_DURATION = 15 * 60 * 1000;
 
-/** Extrai lista de fiagros da homepage (uma única requisição) */
 function parseListFromHomepage(html: string): FiagroData[] {
-  const $ = cheerio.load(html);
+  const $: cheerio.CheerioAPI = cheerio.load(html);
   const results: FiagroData[] = [];
   const seen = new Set<string>();
 
-  $('a[href*="/"]').each((_, el) => {
-    const href = $(el).attr("href") ?? "";
-    const match = href.match(/^\/([a-z0-9]+11)\/?$/i);
+  const linkList: AnyNode[] = [...$('a[href*="/"]')];
+  // const linkList: cheerio.Cheerio<Element>[] = [...$('a[href*="/"]')];
+
+  linkList.forEach((_, el) => {
+    const rawHref = $(el).attr("href") ?? "";
+
+    const normalizedHref = (() => {
+      if (!rawHref) return "";
+      if (rawHref.startsWith("http")) {
+        try {
+          return new URL(rawHref).pathname;
+        } catch {
+          return "";
+        }
+      }
+      return rawHref;
+    })();
+
+    const match = normalizedHref.match(/^\/([a-z0-9]+11)\/?$/i);
     if (!match) return;
+
     const ticker = match[1].toUpperCase();
     if (seen.has(ticker)) return;
     seen.add(ticker);
 
-    const card = $(el).closest("div[class]").length ? $(el).closest("div[class]") : $(el).parent();
+    const $el = $(el);
+    const card = $el.closest("div[class]").length ? $el.closest("div[class]") : $el.parent();
+
     const text = card.text();
     const priceMatch = text.match(/R\$\s*([\d,]+)/);
     const dyMatch = text.match(/DY\s*([\d,]+)\s*%/);
+
     const preco = priceMatch ? priceMatch[1].replace(",", ".") : PLACEHOLDER;
     const dy = dyMatch ? dyMatch[1].replace(",", ".") : PLACEHOLDER;
+
     const nome =
-      $(el)
+      $el
         .text()
         .trim()
         .replace(ticker, "")
@@ -64,7 +85,6 @@ function parseListFromHomepage(html: string): FiagroData[] {
   return results;
 }
 
-/** Responde JSON */
 function sendJson(res: ServerResponse, status: number, data: unknown): void {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
@@ -92,6 +112,7 @@ export default async function handler(
     .filter(Boolean);
   const b3Set = new Set(b3Acronyms);
 
+  // Serve do cache se ainda válido
   if (listCache && Date.now() - listCache.timestamp < CACHE_DURATION) {
     const filtered = listCache.data.filter((item) => {
       const acronym = item.ticker.replace(/11$/, "");

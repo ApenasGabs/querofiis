@@ -39,6 +39,10 @@ const port = 3001;
 
 const FIAGRO_LIST_URL = "https://fiagro.com.br/";
 const PLACEHOLDER = "—";
+const FIAGRO_DEBUG = process.env.FIAGRO_DEBUG === "true";
+if (FIAGRO_DEBUG) {
+  console.log("[fiagro-data] debug logging enabled");
+}
 
 let listCache: { data: FiagroData[]; timestamp: number } | null = null;
 const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
@@ -50,8 +54,19 @@ function parseListFromHomepage(html: string): FiagroData[] {
   const seen = new Set<string>();
 
   $('a[href*="/"]').each((_, el) => {
-    const href = $(el).attr("href") ?? "";
-    const match = href.match(/^\/([a-z0-9]+11)\/?$/i);
+    const rawHref = $(el).attr("href") ?? "";
+    const normalizedHref = (() => {
+      if (!rawHref) return "";
+      if (rawHref.startsWith("http")) {
+        try {
+          return new URL(rawHref).pathname;
+        } catch {
+          return "";
+        }
+      }
+      return rawHref;
+    })();
+    const match = normalizedHref.match(/^\/([a-z0-9]+11)\/?$/i);
     if (!match) return;
     const ticker = match[1].toUpperCase();
     if (seen.has(ticker)) return;
@@ -150,6 +165,9 @@ app.get("/api/fiagro-data", async (req: express.Request, res: express.Response) 
   }
 
   const { tickers } = req.query;
+  if (FIAGRO_DEBUG) {
+    console.log("[fiagro-data] incoming", tickers);
+  }
   if (!tickers || typeof tickers !== "string") {
     return res.status(400).json({ error: "Tickers parameter required" });
   }
@@ -165,6 +183,16 @@ app.get("/api/fiagro-data", async (req: express.Request, res: express.Response) 
       const acronym = item.ticker.replace(/11$/, "");
       return b3Set.has(acronym) || b3Set.has(item.ticker);
     });
+    if (FIAGRO_DEBUG) {
+      console.log(
+        "[fiagro-data] cache",
+        JSON.stringify({
+          requested: Array.from(b3Set),
+          total: listCache.data.length,
+          filtered: filtered.length,
+        }),
+      );
+    }
     return res.status(200).json(filtered);
   }
 
@@ -191,6 +219,17 @@ app.get("/api/fiagro-data", async (req: express.Request, res: express.Response) 
       const acronym = item.ticker.replace(/11$/, "");
       return b3Set.has(acronym) || b3Set.has(item.ticker);
     });
+
+    if (FIAGRO_DEBUG) {
+      console.log(
+        "[fiagro-data] fetch",
+        JSON.stringify({
+          requested: Array.from(b3Set),
+          total: fullList.length,
+          filtered: filtered.length,
+        }),
+      );
+    }
 
     res.status(200).json(filtered);
   } catch (error) {

@@ -17,8 +17,19 @@ function parseListFromHomepage(html: string): FiagroListItem[] {
 
   // Links para /TICKER11/ são os fundos
   $('a[href*="/"]').each((_, el) => {
-    const href = $(el).attr("href") ?? "";
-    const match = href.match(/^\/([a-z0-9]+11)\/?$/i);
+    const rawHref = $(el).attr("href") ?? "";
+    const normalizedHref = (() => {
+      if (!rawHref) return "";
+      if (rawHref.startsWith("http")) {
+        try {
+          return new URL(rawHref).pathname;
+        } catch {
+          return "";
+        }
+      }
+      return rawHref;
+    })();
+    const match = normalizedHref.match(/^\/([a-z0-9]+11)\/?$/i);
     if (!match) return;
     const ticker = match[1].toUpperCase();
     if (seen.has(ticker)) return;
@@ -30,7 +41,13 @@ function parseListFromHomepage(html: string): FiagroListItem[] {
     const dyMatch = text.match(/DY\s*([\d,]+)\s*%/);
     const preco = priceMatch ? priceMatch[1].replace(",", ".") : "—";
     const dy = dyMatch ? dyMatch[1].replace(",", ".") : "—";
-    const nome = $(el).text().trim().replace(ticker, "").replace(/R\$\s*[\d,]+.*/, "").trim() || ticker;
+    const nome =
+      $(el)
+        .text()
+        .trim()
+        .replace(ticker, "")
+        .replace(/R\$\s*[\d,]+.*/, "")
+        .trim() || ticker;
     results.push({ ticker, nome: nome.slice(0, 80), preco, dy });
   });
 

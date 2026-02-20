@@ -69,20 +69,22 @@ export interface UseFiagrosReturn {
 
 const ITEMS_PER_PAGE = 6;
 
-export function useFiagros(): UseFiagrosReturn {
+export const useFiagros = (): UseFiagrosReturn => {
   const [allFiagros, setAllFiagros] = useState<Fiagro[]>([]);
+  const [b3Fiagros, setB3Fiagros] = useState<Fiagro[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tickers, setTickers] = useState<string[]>([]);
   const [page, setPage] = useState(1);
 
+  console.log("b3Fiagros: ", b3Fiagros);
   const [filters, setFilters] = useState<Filters>({
     priceMin: 8,
     priceMax: 110,
     dyMin: 0,
     pvpBelow1: false,
     pvpFair: false,
-    sectors: ["Paper (CRI/Agro)", "Equity / Land", "Hybrid", "FOF (Fund of Funds)"],
+    sectors: [],
   });
 
   const [search, setSearch] = useState("");
@@ -90,7 +92,7 @@ export function useFiagros(): UseFiagrosReturn {
   const [detailByTicker, setDetailByTicker] = useState<Record<string, Fiagro>>({});
   const [loadingDetailTicker, setLoadingDetailTicker] = useState<string | null>(null);
 
-  // Fetch tickers from B3 via our API (evita HTML no lugar de JSON em produção/preview)
+  // Fetch dados da B3 e já exibe cards básicos
   useEffect(() => {
     const fetchTickers = async () => {
       try {
@@ -108,6 +110,21 @@ export function useFiagros(): UseFiagrosReturn {
           .map((item) => item.acronym?.trim())
           .filter((t): t is string => typeof t === "string" && t.length > 0);
         setTickers(tickerList.slice(0, 25));
+
+        // Monta cards básicos imediatamente
+        const mapped: Fiagro[] = data.results.map((item) => ({
+          ticker: (item.acronym || "").toUpperCase(),
+          preco: "—",
+          dy: "—",
+          pvp: "—",
+          pl: "—",
+          setor: "Fiagro",
+          last_div: "—",
+          nome: item.tradingName || item.fundName || (item.acronym || "").toUpperCase(),
+        }));
+        setB3Fiagros(mapped);
+        console.log("mapped: ", mapped);
+        setAllFiagros(mapped); // Mostra imediatamente
       } catch (err) {
         console.error("Error fetching tickers:", err);
         setError("Failed to load tickers");
@@ -116,7 +133,7 @@ export function useFiagros(): UseFiagrosReturn {
     fetchTickers();
   }, []);
 
-  // Fetch fiagros data
+  // Fetch fiagros data detalhados (scraping) e atualiza cards
   useEffect(() => {
     if (tickers.length === 0) return;
 
@@ -127,7 +144,10 @@ export function useFiagros(): UseFiagrosReturn {
         const response = await fetch(`/api/fiagro-data?tickers=${tickers.join(",")}`);
         if (!response.ok) throw new Error("Failed to fetch fiagros data");
         const data: Fiagro[] = await response.json();
-        setAllFiagros(data);
+        // Atualiza apenas se vier dados válidos
+        if (Array.isArray(data) && data.length > 0) {
+          setAllFiagros(data);
+        }
       } catch (err) {
         console.error("Error fetching fiagros:", err);
         setError("Failed to load fiagros data");
@@ -228,4 +248,4 @@ export function useFiagros(): UseFiagrosReturn {
     loadingDetailTicker,
     fetchDetail,
   };
-}
+};

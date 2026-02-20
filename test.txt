@@ -1,0 +1,10 @@
+vamos debugar, rode a aplicacao ate conseguir fazer com que identifique porque nao esta funcionando,
+
+arrume usando typescript, nada de js puro, sempre tipando corretamente e sem usar any
+voce deve testar sempre, rode a aplicacao para conseguir ententeder o real motivo de nao estar conseguindo funcionar a aplicacao 
+
+ aqui o erro que deu no console 
+
+index--08gv4FN.js:9 Error fetching tickers: SyntaxError: Unexpected token '<', "<!doctype "... is not valid JSON
+(anonymous)	@	index--08gv4FN.js:9
+
