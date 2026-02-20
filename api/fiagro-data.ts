@@ -1,8 +1,6 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { IncomingMessage, ServerResponse } from "http";
-import type { Element } from "domhandler"; // <-- importar daqui especificamente
-import type { AnyNode } from "domhandler";
 
 export interface FiagroData {
   ticker: string;
@@ -23,14 +21,13 @@ let listCache: { data: FiagroData[]; timestamp: number } | null = null;
 const CACHE_DURATION = 15 * 60 * 1000;
 
 function parseListFromHomepage(html: string): FiagroData[] {
-  const $: cheerio.CheerioAPI = cheerio.load(html);
+  const $ = cheerio.load(html);
   const results: FiagroData[] = [];
   const seen = new Set<string>();
 
-  const linkList: AnyNode[] = [...$('a[href*="/"]')];
-  // const linkList: cheerio.Cheerio<Element>[] = [...$('a[href*="/"]')];
+  const linkList = $('a[href*="/"]');
 
-  linkList.forEach((_, el) => {
+  linkList.each((_, el) => {
     const rawHref = $(el).attr("href") ?? "";
 
     const normalizedHref = (() => {
@@ -49,6 +46,7 @@ function parseListFromHomepage(html: string): FiagroData[] {
     if (!match) return;
 
     const ticker = match[1].toUpperCase();
+    console.log("ticker: ", ticker);
     if (seen.has(ticker)) return;
     seen.add(ticker);
 
@@ -85,11 +83,11 @@ function parseListFromHomepage(html: string): FiagroData[] {
   return results;
 }
 
-function sendJson(res: ServerResponse, status: number, data: unknown): void {
+const sendJson = (res: ServerResponse, status: number, data: unknown): void => {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
   res.end(JSON.stringify(data));
-}
+};
 
 export default async function handler(
   req: IncomingMessage & { query: Record<string, string | string[]> },
