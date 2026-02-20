@@ -35,7 +35,7 @@ export const FiagroExplorer = () => {
   };
 
   return (
-    <div className="flex flex-1 overflow-hidden">
+    <div className="flex flex-1 overflow-hidden" data-testid="fiagro-explorer">
       {/* Sidebar */}
       <aside className="hidden lg:flex flex-col w-72 border-r border-white/10 bg-background-dark/50 backdrop-blur-sm overflow-y-auto h-[calc(100vh-64px)] p-6">
         <div className="flex items-center justify-between mb-8">

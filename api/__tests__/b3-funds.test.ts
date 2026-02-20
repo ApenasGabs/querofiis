@@ -45,9 +45,11 @@ describe("API /api/b3-funds", () => {
     await handler(req, res);
 
     expect(res.statusCode).toBe(200);
-    const jsonData = res.payload as { results: string[] };
+    const jsonData: { results: typeof mockResults } = res.payload as {
+      results: typeof mockResults;
+    };
     expect(Array.isArray(jsonData.results)).toBe(true);
-    expect(jsonData.results).toEqual(["TEST", "MOCK"]);
+    expect(jsonData.results).toEqual(mockResults);
   });
 
   it("deve retornar 405 para métodos diferentes de GET", async () => {

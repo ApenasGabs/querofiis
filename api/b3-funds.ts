@@ -1,5 +1,6 @@
 interface VercelRequest {
   method?: string;
+  query?: Record<string, string | string[]>;
 }
 
 interface VercelResponse {
@@ -52,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
 
-    const data: Partial<B3ListResponse> = await response.json();
+    const data = (await response.json()) as Partial<B3ListResponse>;
     if (!data.results || !Array.isArray(data.results)) {
       res.status(502).json({ error: "Malformed B3 payload" });
       return;

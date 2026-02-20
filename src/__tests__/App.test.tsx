@@ -9,7 +9,18 @@ describe("App (home)", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve([]) }),
+        Promise.resolve({
+          ok: true,
+          headers: {
+            get: (key: string) =>
+              key.toLowerCase() === "content-type" ? "application/json" : null,
+          },
+          json: () =>
+            Promise.resolve({
+              page: { pageNumber: 1, pageSize: 0, totalRecords: 0, totalPages: 0 },
+              results: [],
+            }),
+        }),
       ) as unknown as typeof fetch,
     );
   });

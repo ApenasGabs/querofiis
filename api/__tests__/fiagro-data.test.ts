@@ -1,12 +1,12 @@
 import axios from "axios";
-import type { AxiosRequestConfig, AxiosResponse } from "axios";
+import type { AxiosResponse, InternalAxiosRequestConfig } from "axios";
 import { IncomingMessage, ServerResponse } from "http";
 import { Socket } from "net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import handler from "../fiagro-data";
 
 vi.mock("axios");
-const mockedAxios = vi.mocked(axios);
+const mockedAxiosGet = vi.mocked(axios.get);
 
 type HandlerRequest = Parameters<typeof handler>[0];
 type HandlerResponse = Parameters<typeof handler>[1];
@@ -43,9 +43,9 @@ function mockAxiosHtml(html: string) {
     status: 200,
     statusText: "OK",
     headers: {},
-    config: {} as AxiosRequestConfig,
+    config: { headers: {} } as InternalAxiosRequestConfig,
   };
-  mockedAxios.get.mockResolvedValueOnce(axiosResponse);
+  mockedAxiosGet.mockResolvedValueOnce(axiosResponse);
 }
 
 afterEach(() => {
@@ -67,7 +67,9 @@ describe("API /api/fiagro-data", () => {
   it("deve retornar lista filtrada se passar tickers", async () => {
     const req = createRequest({ query: { tickers: "RZAG11" } });
     const res = createResponse();
+    const padding = "<!-- pad -->".repeat(100);
     const html = `
+      <html><head></head><body>${padding}
       <div>
         <a href="/rzag11/">
           RZAG11
@@ -75,6 +77,7 @@ describe("API /api/fiagro-data", () => {
           <span>DY 12 %</span>
         </a>
       </div>
+      </body></html>
     `;
 
     mockAxiosHtml(html);
