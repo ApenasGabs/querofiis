@@ -1,12 +1,4 @@
-interface VercelRequest {
-  method?: string;
-  query?: Record<string, string | string[]>;
-}
-
-interface VercelResponse {
-  status: (code: number) => VercelResponse;
-  json: (data: unknown) => void;
-}
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 interface B3FundItem {
   id: number;
@@ -36,7 +28,7 @@ const REQUEST_HEADERS = {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-  if (req.method && req.method !== "GET") {
+  if (req.method !== "GET") {
     res.status(405).json({ error: "Method not allowed" });
     return;
   }

@@ -1,6 +1,6 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
-import { IncomingMessage, ServerResponse } from "http";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 export interface FiagroData {
   ticker: string;
@@ -83,24 +83,15 @@ function parseListFromHomepage(html: string): FiagroData[] {
   return results;
 }
 
-const sendJson = (res: ServerResponse, status: number, data: unknown): void => {
-  res.statusCode = status;
-  res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify(data));
-};
-
-export default async function handler(
-  req: IncomingMessage & { query: Record<string, string | string[]> },
-  res: ServerResponse,
-): Promise<void> {
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "GET") {
-    sendJson(res, 405, { error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
     return;
   }
 
   const { tickers } = req.query;
   if (!tickers || typeof tickers !== "string") {
-    sendJson(res, 400, { error: "Tickers parameter required" });
+    res.status(400).json({ error: "Tickers parameter required" });
     return;
   }
 
@@ -116,7 +107,7 @@ export default async function handler(
       const acronym = item.ticker.replace(/11$/, "");
       return b3Set.has(acronym) || b3Set.has(item.ticker);
     });
-    sendJson(res, 200, filtered);
+    res.status(200).json(filtered);
     return;
   }
 
@@ -133,7 +124,7 @@ export default async function handler(
     });
 
     if (!response.data || response.data.length < 1000) {
-      sendJson(res, 502, { error: "Fiagro homepage unavailable" });
+      res.status(502).json({ error: "Fiagro homepage unavailable" });
       return;
     }
 
@@ -145,9 +136,9 @@ export default async function handler(
       return b3Set.has(acronym) || b3Set.has(item.ticker);
     });
 
-    sendJson(res, 200, filtered);
+    res.status(200).json(filtered);
   } catch (err) {
     console.error("Error fetching fiagro list:", err);
-    sendJson(res, 500, { error: "Failed to fetch fiagro list" });
+    res.status(500).json({ error: "Failed to fetch fiagro list" });
   }
 }
