@@ -281,6 +281,11 @@ app.get("/api/openapi", (_req: express.Request, res: express.Response) => {
   res.status(200).json(openapiSpec);
 });
 
+app.get("/api", (_req: express.Request, res: express.Response) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.sendFile("public/docs.html", { root: process.cwd() });
+});
+
 app.listen(port, () => {
   console.log(`Local API server running at http://localhost:${port}`);
   console.log(`API Docs: http://localhost:5173/docs.html`);
