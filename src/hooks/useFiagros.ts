@@ -161,16 +161,15 @@ export const useFiagros = (): UseFiagrosReturn => {
   // Filtered and sorted fiagros
   const fiagros = useMemo(() => {
     const filtered = allFiagros.filter((fiagro) => {
-      const preco = parseFloat(fiagro.preco) || 0;
+      const preco = parseFloat(fiagro.preco);
       const dy = parseFloat(fiagro.dy) || 0;
       const pvp = parseFloat(fiagro.pvp) || 0;
 
-      // Price range
-      if (preco < filters.priceMin || preco > filters.priceMax) return false;
+      // Price range 
+      if (!isNaN(preco) && (preco < filters.priceMin || preco > filters.priceMax)) return false;
 
       // DY min
-      if (dy < filters.dyMin) return false;
-
+      if (!isNaN(parseFloat(fiagro.dy)) && dy < filters.dyMin) return false;
       // P/VP (só aplica se tiver valor numérico; "—" = detalhe não carregado)
       if (!Number.isNaN(pvp)) {
         if (filters.pvpBelow1 && pvp >= 1) return false;
