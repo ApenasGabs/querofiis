@@ -1,6 +1,7 @@
 import express from "express";
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { openapiSpec } from "./api/openapi-spec.js";
 
 interface FiagroData {
   ticker: string;
@@ -271,6 +272,16 @@ app.get("/api/fiagro-detail", async (req: express.Request, res: express.Response
   }
 });
 
+app.get("/api/ping", (_req: express.Request, res: express.Response) => {
+  res.status(200).json({ pong: { status: "ok", timestamp: new Date().toISOString() } });
+});
+
+app.get("/api/openapi", (_req: express.Request, res: express.Response) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.status(200).json(openapiSpec);
+});
+
 app.listen(port, () => {
   console.log(`Local API server running at http://localhost:${port}`);
+  console.log(`API Docs: http://localhost:5173/docs.html`);
 });
