@@ -71,13 +71,11 @@ const ITEMS_PER_PAGE = 6;
 
 export const useFiagros = (): UseFiagrosReturn => {
   const [allFiagros, setAllFiagros] = useState<Fiagro[]>([]);
-  const [b3Fiagros, setB3Fiagros] = useState<Fiagro[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tickers, setTickers] = useState<string[]>([]);
   const [page, setPage] = useState(1);
 
-  console.log("b3Fiagros: ", b3Fiagros);
   const [filters, setFilters] = useState<Filters>({
     priceMin: 8,
     priceMax: 110,
@@ -92,7 +90,7 @@ export const useFiagros = (): UseFiagrosReturn => {
   const [detailByTicker, setDetailByTicker] = useState<Record<string, Fiagro>>({});
   const [loadingDetailTicker, setLoadingDetailTicker] = useState<string | null>(null);
 
-  // Fetch dados da B3 e já exibe cards básicos
+  // Fetch dados da B3 — serve como filtro (quais fundos mostrar) e fallback visual
   useEffect(() => {
     const fetchTickers = async () => {
       try {
@@ -109,9 +107,8 @@ export const useFiagros = (): UseFiagrosReturn => {
         const tickerList = data.results
           .map((item) => item.acronym?.trim())
           .filter((t): t is string => typeof t === "string" && t.length > 0);
-        setTickers(tickerList.slice(0, 25));
 
-        // Monta cards básicos imediatamente
+        // Monta cards básicos imediatamente (nome da B3, preços virão do scraper)
         const mapped: Fiagro[] = data.results.map((item) => ({
           ticker: (item.acronym || "").toUpperCase(),
           preco: "—",
@@ -122,12 +119,12 @@ export const useFiagros = (): UseFiagrosReturn => {
           last_div: "—",
           nome: item.tradingName || item.fundName || (item.acronym || "").toUpperCase(),
         }));
-        setB3Fiagros(mapped);
-        console.log("mapped: ", mapped);
-        setAllFiagros(mapped); // Mostra imediatamente
+        setAllFiagros(mapped);
+        setTickers(tickerList.slice(0, 25)); // dispara o segundo useEffect
       } catch (err) {
         console.error("Error fetching tickers:", err);
         setError("Failed to load tickers");
+        setLoading(false); // B3 falhou — não há scraper para esperar
       }
     };
     fetchTickers();
@@ -144,9 +141,25 @@ export const useFiagros = (): UseFiagrosReturn => {
         const response = await fetch(`/api/fiagro-data?tickers=${tickers.join(",")}`);
         if (!response.ok) throw new Error("Failed to fetch fiagros data");
         const data: Fiagro[] = await response.json();
-        // Atualiza apenas se vier dados válidos
+
         if (Array.isArray(data) && data.length > 0) {
-          setAllFiagros(data);
+          // Indexa os dados do scraper pelo ticker (com e sem "11")
+          // Ex: { "AAGR11": {...}, "AAGR": {...} }
+          const scraped = new Map<string, Fiagro>();
+          for (const f of data) {
+            scraped.set(f.ticker.toUpperCase(), f);
+            scraped.set(f.ticker.replace(/11$/i, "").toUpperCase(), f);
+          }
+
+          // Merge: mantém todos os cards do B3 mas sobrescreve com dados do scraper
+          // O ticker do scraper (ex: "FGAA11") substitui o ticker do B3 (ex: "FGAA")
+          // pois o scraper tem o código completo de negociação
+          setAllFiagros((prev) =>
+            prev.map((f) => {
+              const match = scraped.get(f.ticker.toUpperCase());
+              return match ? { ...f, ...match } : f;
+            }),
+          );
         }
       } catch (err) {
         console.error("Error fetching fiagros:", err);
@@ -165,7 +178,7 @@ export const useFiagros = (): UseFiagrosReturn => {
       const dy = parseFloat(fiagro.dy) || 0;
       const pvp = parseFloat(fiagro.pvp) || 0;
 
-      // Price range 
+      // Price range
       if (!isNaN(preco) && (preco < filters.priceMin || preco > filters.priceMax)) return false;
 
       // DY min
