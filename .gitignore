@@ -32,3 +32,6 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+.env
+.env.*
+storage/
