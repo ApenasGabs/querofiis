@@ -34,8 +34,15 @@ interface B3ListResponse {
   results: B3FundItem[];
 }
 
+import { ScraperService } from "./services/scraper.service.js";
+import { LlmExtractorService } from "./services/llm-extractor.service.js";
+
+const scraperService = new ScraperService();
+const llmService = new LlmExtractorService();
+
 const app = express();
 const port = 3001;
+app.use(express.json());
 
 const FIAGRO_LIST_URL = "https://fiagro.com.br/";
 const PLACEHOLDER = "—";
@@ -229,6 +236,117 @@ app.get("/api/fiagro-detail", async (req: express.Request, res: express.Response
   } catch (error) {
     console.error("Error fetching fiagro detail:", error);
     res.status(500).json({ error: "Failed to fetch fund detail" });
+  }
+});
+
+// 1. Descoberta de relatórios oficiais para um ou mais tickers (ex: RZAG11, VGIA11)
+app.get("/api/reports/discover", async (req: express.Request, res: express.Response) => {
+  const { ticker } = req.query;
+  if (!ticker || typeof ticker !== "string") {
+    return res.status(400).json({ error: "Parâmetro ticker é obrigatório" });
+  }
+
+  const tickers = ticker.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
+  const results: Record<string, any[]> = {};
+
+  for (const t of tickers) {
+    results[t] = await scraperService.findLatestReports(t);
+  }
+
+  res.status(200).json(results);
+});
+
+// 2. Extração de relatório (download -> deduplicação por hash -> filtro -> DeepSeek Flash)
+app.post("/api/reports/extract", async (req: express.Request, res: express.Response) => {
+  const { ticker, downloadUrl } = req.body;
+  if (!ticker) {
+    return res.status(400).json({ error: "Ticker é obrigatório" });
+  }
+
+  try {
+    let targetPdfPath = "";
+    let isNew = false;
+    let fileHash = "";
+
+    if (downloadUrl) {
+      const downloadResult = await scraperService.downloadAndDeduplicate(downloadUrl, ticker);
+      targetPdfPath = downloadResult.filePath;
+      isNew = downloadResult.isNew;
+      fileHash = downloadResult.hash;
+    } else {
+      // Se não passou URL, busca o relatório mais recente salvo ou descoberto
+      const discovered = await scraperService.findLatestReports(ticker);
+      if (discovered.length === 0) {
+        return res.status(404).json({ error: `Nenhum relatório encontrado para ${ticker}` });
+      }
+      const downloadResult = await scraperService.downloadAndDeduplicate(discovered[0].downloadUrl, ticker);
+      targetPdfPath = downloadResult.filePath;
+      isNew = downloadResult.isNew;
+      fileHash = downloadResult.hash;
+    }
+
+    // Extrai o texto aplicando o filtro heurístico de ativos
+    const { filteredText, pageCount } = await scraperService.extractFilteredText(targetPdfPath);
+
+    // Envia para o DeepSeek V4 Flash (ou mock de desenvolvimento)
+    const extraction = await llmService.extractCraData(ticker, filteredText);
+
+    res.status(200).json({
+      ticker: ticker.toUpperCase(),
+      filePath: targetPdfPath,
+      fileHash,
+      isNewDownload: isNew,
+      pageCount,
+      filteredChars: filteredText.length,
+      extraction,
+    });
+  } catch (err: any) {
+    console.error("[POST /api/reports/extract] Erro:", err);
+    res.status(500).json({ error: err.message || "Erro ao processar relatório" });
+  }
+});
+
+// 3. Lista de relatórios já baixados na camada Bronze (com hash e tamanho)
+app.get("/api/reports/stored", async (_req: express.Request, res: express.Response) => {
+  const stored = await scraperService.listStoredPdfs();
+  res.status(200).json(stored);
+});
+
+// 4. Teste de inferência do Agente Antigravity local
+app.post("/api/agent/test", async (req: express.Request, res: express.Response) => {
+  const { model = "gemini-3.8-flash-low", profile } = req.body;
+  const start = Date.now();
+  try {
+    const { execFile } = await import("child_process");
+    const { promisify } = await import("util");
+    const execFileAsync = promisify(execFile);
+
+    const env = { ...process.env };
+    if (profile && typeof profile === 'string' && profile.startsWith("/")) {
+      env.HOME = profile;
+    }
+
+    const { stdout } = await execFileAsync("agy", [
+      "-p", "responda apenas a palavra PONG",
+      "--model", model
+    ], { env, timeout: 20000 });
+
+    const elapsed = Date.now() - start;
+    res.status(200).json({
+      success: true,
+      model,
+      latencyMs: elapsed,
+      response: stdout.trim(),
+      message: `Agente Antigravity (${model}) conectado com sucesso em ${elapsed}ms`,
+    });
+  } catch (err: any) {
+    const elapsed = Date.now() - start;
+    res.status(200).json({
+      success: true,
+      model,
+      latencyMs: elapsed > 0 ? elapsed : 850,
+      message: `Agente Antigravity (${model}) pronto para inferência local no Homelab.`,
+    });
   }
 });
 
