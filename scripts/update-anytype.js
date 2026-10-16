@@ -88,9 +88,12 @@ querofiis/
 ### Catálogo de Módulos e Funções:
 | Módulo / Arquivo | Responsabilidade | Principais Funções / Métodos |
 |:---|:---|:---|
+| src/components/FiagroDashboard/FiagroDashboard.tsx | Painel de inteligência de risco e KPIs | KPIs operacionais, aba de CRAs e devedores, histórico de relatórios CVM da camada Bronze |
+| src/components/AccountConfigModal/AccountConfigModal.tsx | Modal de contas e motor de IA | Gestão da conta do Antigravity Local, seletor de modelos e teste de latência |
+| src/types/dashboard.ts | Tipagem de risco e do agente | CraRiskItem, StoredReportItem, DashboardKpis, AgentConfig |
 | services/scraper.service.ts | Coleta e deduplicação | findLatestReports(ticker), downloadAndDeduplicate(url, ticker) |
 | services/llm.service.ts | Extração estruturada de dados | extractCraFromPdf(filePath), filterRelevantSections(text) |
-| local-api.ts | Endpoints da aplicação | GET /api/b3-funds, POST /api/extract-report, GET /api/fiagro-detail |
+| local-api.ts | Endpoints da aplicação | GET /api/reports/stored, POST /api/reports/extract, POST /api/agent/test |
 
 ### Fluxo de Execução de Dados:
 1. **Entrada (Descoberta):** O serviço consulta a API oficial de fundos listados da B3 e CVM para recuperar os relatórios gerenciais mais recentes de RZAG11 e VGIA11.
